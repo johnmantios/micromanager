@@ -2,24 +2,20 @@ package daemon
 
 import (
 	"github.com/johnmantios/micromanager/os"
+	"github.com/johnmantios/micromanager/repo"
 	"time"
 )
 
-type Event struct {
-	IsLocked bool
-	Time     time.Time
-}
+func StartDaemon(host os.Host) <-chan repo.Event {
 
-func StartDaemon(host os.Host) <-chan Event {
-
-	eventChannel := make(chan Event)
+	eventChannel := make(chan repo.Event)
 
 	go ListenForEvents(host, eventChannel)
 
 	return eventChannel
 }
 
-func ListenForEvents(host os.Host, ch chan<- Event) {
+func ListenForEvents(host os.Host, ch chan<- repo.Event) {
 	defer close(ch)
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -34,14 +30,15 @@ func ListenForEvents(host os.Host, ch chan<- Event) {
 		isLocked := host.IsLocked()
 
 		if missingTime || isLocked {
-			ch <- Event{
+			ch <- repo.Event{
 				IsLocked: true,
-				Time:     lastTime,
+				Tick:     lastTime,
+				UserID:   "",
 			}
 		} else {
-			ch <- Event{
+			ch <- repo.Event{
 				IsLocked: false,
-				Time:     newTime,
+				Tick:     newTime,
 			}
 		}
 
