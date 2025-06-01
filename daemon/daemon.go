@@ -18,18 +18,16 @@ func StartDaemon(host os.Host) <-chan repo.Event {
 func ListenForEvents(host os.Host, ch chan<- repo.Event) {
 	defer close(ch)
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 
 	lastTime := time.Now()
 
 	for {
 		newTime := <-ticker.C
 
-		missingTime := newTime.Sub(lastTime).Seconds() > 5
-
 		isLocked := host.IsLocked()
 
-		if missingTime || isLocked {
+		if isLocked {
 			ch <- repo.Event{
 				IsLocked: true,
 				Tick:     lastTime,
