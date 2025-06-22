@@ -17,6 +17,8 @@ func main() {
 
 	host := micromanagerOS.Host{Logger: logger}
 
+	host.UserID = host.WhoAmI()
+
 	logger.PrintInfo("Starting micromanagement...", map[string]string{
 		"os": runtime.GOOS,
 	})
@@ -39,6 +41,7 @@ func main() {
 			})
 		}
 		logger.PrintInfo("status", map[string]string{
+			"user":      host.UserID,
 			"is locked": fmt.Sprintf("%t", event.IsLocked),
 		})
 	}

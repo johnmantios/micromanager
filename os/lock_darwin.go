@@ -19,3 +19,18 @@ func (h *Host) isLocked() bool {
 	return strings.Contains(string(output), "CGSSessionScreenIsLocked")
 
 }
+
+func (h *Host) whoAmI() string {
+	cmd := h.getCommandRunner()("whoami")
+	if cmd.Err != nil {
+		h.Logger.PrintError(cmd.Err, nil)
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		h.Logger.PrintError(errors.New("error producing standard output"), nil)
+	}
+
+	return strings.TrimSuffix(string(output), "\n")
+
+}

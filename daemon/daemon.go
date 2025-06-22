@@ -31,13 +31,13 @@ func ListenForEvents(host os.Host, ch chan<- repo.Event) {
 			ch <- repo.Event{
 				IsLocked: true,
 				Tick:     lastTime,
-				UserID:   "john",
+				UserID:   host.UserID,
 			}
 		} else {
 			ch <- repo.Event{
 				IsLocked: false,
 				Tick:     newTime.UTC(),
-				UserID:   "john",
+				UserID:   host.UserID,
 			}
 		}
 
