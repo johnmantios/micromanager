@@ -5,11 +5,11 @@ import (
 	"github.com/johnmantios/micromanager/daemon"
 	"github.com/johnmantios/micromanager/internal/jsonlog"
 	micromanagerOS "github.com/johnmantios/micromanager/os"
+	repo2 "github.com/johnmantios/micromanager/repo"
 	repository "github.com/johnmantios/micromanager/repo/timescale"
+	_ "github.com/lib/pq"
 	"os"
 	"runtime"
-
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -33,17 +33,27 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
+	previous := repo2.Event{
+		IsLocked: true,
+	}
+
 	for event := range daemon.StartDaemon(host) {
-		err = repo.Event.SaveTick(event)
-		if err != nil {
-			logger.PrintWarning("could not save tick!", map[string]string{
-				"error": err.Error(),
+		if event.IsLocked != previous.IsLocked {
+			err = repo.Event.SaveTick(event)
+			if err != nil {
+				logger.PrintWarning("could not save tick!", map[string]string{
+					"error": err.Error(),
+				})
+			}
+			logger.PrintInfo("status", map[string]string{
+				"user":      host.UserID,
+				"is locked": fmt.Sprintf("%t", event.IsLocked),
 			})
+			previous = event
+		} else {
+			continue
 		}
-		logger.PrintInfo("status", map[string]string{
-			"user":      host.UserID,
-			"is locked": fmt.Sprintf("%t", event.IsLocked),
-		})
+
 	}
 
 }
