@@ -8,6 +8,8 @@ import (
 	repository "github.com/johnmantios/micromanager/repo/timescale"
 	"os"
 	"runtime"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {

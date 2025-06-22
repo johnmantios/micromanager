@@ -20,7 +20,7 @@ func ListenForEvents(host os.Host, ch chan<- repo.Event) {
 
 	ticker := time.NewTicker(1 * time.Second)
 
-	lastTime := time.Now()
+	lastTime := time.Now().UTC()
 
 	for {
 		newTime := <-ticker.C
@@ -31,12 +31,13 @@ func ListenForEvents(host os.Host, ch chan<- repo.Event) {
 			ch <- repo.Event{
 				IsLocked: true,
 				Tick:     lastTime,
-				UserID:   "",
+				UserID:   "john",
 			}
 		} else {
 			ch <- repo.Event{
 				IsLocked: false,
-				Tick:     newTime,
+				Tick:     newTime.UTC(),
+				UserID:   "john",
 			}
 		}
 

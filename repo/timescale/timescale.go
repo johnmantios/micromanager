@@ -95,8 +95,9 @@ func NewTimescaleRepo(db *sql.DB) (*Repo, error) {
 
 func (m EventsModel) SaveTick(event repo.Event) error {
 	query := `
-				INSERT INTO micromanager.event (tick, is_locked, user_id)
-				VALUES ($1, $2, $3);
+				INSERT INTO micromanager.tick (tick, is_locked, user_id)
+				VALUES ($1, $2, $3)
+				RETURNING tick;
 				`
 
 	args := []any{

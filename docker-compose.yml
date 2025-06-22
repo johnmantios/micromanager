@@ -1,0 +1,41 @@
+services:
+  database:
+    build:
+      context: .
+      dockerfile: ./database/timescale/Dockerfile
+    container_name: timescale-micromanager
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: micromanager
+    ports:
+      - "5432:5432"
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d micromanager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  grafana:
+    image: grafana/grafana
+    depends_on:
+      - database
+    build:
+      context: .
+      dockerfile: ./grafana/Dockerfile
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/micromanager_dashboard.json"
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: database:5432
+      GF_DATABASE_NAME: micromanager
+      GF_DATABASE_USER: root
+      GF_DATABASE_PASSWORD: root
+      GF_DATABASE_SSL_MODE: disable
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
