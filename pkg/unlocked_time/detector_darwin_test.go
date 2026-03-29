@@ -1,4 +1,4 @@
-package os
+package unlocked_time
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func TestHelperProcessDarwinLocked(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
 	}
-	fmt.Fprint(os.Stdout, `CGSSessionScreenIsLocked`)
+	fmt.Fprint(os.Stdout, `"IOConsoleLocked" = Yes`)
 	os.Exit(0)
 }
 
@@ -45,13 +45,19 @@ func TestDarwinIsLocked(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "Is not locked",
-			host:     Host{Logger: nil, commandRunner: fakeCommandDarwinUnLocked},
+			name: "Is not locked",
+			host: Host{
+				detector: newDetector(fakeCommandDarwinUnLocked),
+				UserID:   "",
+			},
 			expected: false,
 		},
 		{
-			name:     "Is locked",
-			host:     Host{Logger: nil, commandRunner: fakeCommandDarwinLocked},
+			name: "Is locked",
+			host: Host{
+				detector: newDetector(fakeCommandDarwinLocked),
+				UserID:   "",
+			},
 			expected: true,
 		},
 	}
@@ -59,7 +65,7 @@ func TestDarwinIsLocked(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 
-			actual := tt.host.isLocked()
+			actual := tt.host.detector.IsLocked()
 
 			assert.Equal(t, actual, tt.expected)
 		})
