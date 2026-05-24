@@ -1,37 +1,30 @@
 package main
 
 import (
-	"github.com/johnmantios/micromanager/pkg/config"
-	log "github.com/sirupsen/logrus"
+	"fmt"
+	"github.com/johnmantios/micromanager/internal/config"
+	"github.com/johnmantios/micromanager/internal/jsonlog"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 func main() {
-	log.SetFormatter(&log.JSONFormatter{
-		FieldMap: log.FieldMap{
-			log.FieldKeyTime: "@timestamp",
-			log.FieldKeyMsg:  "message",
-		},
-	})
-
-	conf, err := config.LoadEnv()
+	cfg, err := config.LoadEnv()
 	if err != nil {
-		log.WithError(err).Panic("Loading config from environment failed")
+		panic(fmt.Sprintf("Loading config from environment failed: %s", err.Error()))
 	}
 
-	logLevel, err := log.ParseLevel(conf.LogLevel)
-	if err != nil {
-		log.WithError(err).Panic("parsing the level of logs failed")
-	}
-
-	log.SetLevel(logLevel)
+	log := jsonlog.New(os.Stdout, cfg.LogLevel)
 
 	rootCmd := &cobra.Command{Use: "micromanager"}
 
-	rootCmd.AddCommand(unlockedTimeCmd(conf))
+	rootCmd.AddCommand(pollCmd(&cfg.ActivityDB, log))
+	rootCmd.AddCommand(apiCmd(&cfg.APIService, log))
 
 	err = rootCmd.Execute()
 	if err != nil {
-		log.WithError(err).Panic("Command failed")
+		log.Fatal(err, map[string]string{
+			"message": "Command failed",
+		})
 	}
 }
