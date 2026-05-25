@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/johnmantios/micromanager/internal/jsonlog"
+	"github.com/johnmantios/micromanager/internal/service"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,10 +14,20 @@ import (
 	"time"
 )
 
-func Serve(port int, log *jsonlog.Logger) error {
+type APIRouter struct {
+	screentimeService service.ScreentimeService
+}
+
+func newAPIRouter(screentimeService service.ScreentimeService) *APIRouter {
+	return &APIRouter{screentimeService: screentimeService}
+}
+
+func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeService) error {
+	apiRouter := newAPIRouter(screentimeService)
+
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
-		Handler:      Routes(),
+		Handler:      apiRouter.Routes(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

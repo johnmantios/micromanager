@@ -29,7 +29,7 @@ func pollCmd(cfg *config.ActivityDB, log *jsonlog.Logger) *cobra.Command {
 				log.Error(err.Error())
 			}
 
-			dbConnection, err := db.OpenDB(*cfg)
+			dbConnection, err := db.OpenSQLiteDB(*cfg)
 			if err != nil {
 				log.Fatal(err, nil)
 			}
@@ -39,7 +39,7 @@ func pollCmd(cfg *config.ActivityDB, log *jsonlog.Logger) *cobra.Command {
 				log.Fatal(err, nil)
 			}
 
-			activityService := service.NewScreentimeService(activityRepo, log)
+			activityService := service.NewActivityService(activityRepo, log)
 
 			job, err := s.NewJob(
 				gocron.CronJob(cfg.PullPeriodCronSchedule, false),

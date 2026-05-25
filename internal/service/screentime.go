@@ -1,65 +1,43 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"github.com/johnmantios/micromanager/internal/host"
 	"github.com/johnmantios/micromanager/internal/jsonlog"
+	"github.com/johnmantios/micromanager/internal/model"
 	"github.com/johnmantios/micromanager/internal/repo"
 	"github.com/johnmantios/micromanager/internal/server/input"
-	"net/http"
-	"os/exec"
+	"github.com/johnmantios/micromanager/internal/server/output"
 )
 
 type ScreentimeService struct {
-	ActivityRepo repo.IActivity
-	log          *jsonlog.Logger
+	ScreentimeRepo repo.IScreentime
+	log            *jsonlog.Logger
 }
 
-func NewScreentimeService(activityRepo repo.IActivity, log *jsonlog.Logger) ScreentimeService {
-	return ScreentimeService{ActivityRepo: activityRepo, log: log}
+func NewScreentimeService(screentimeRepo repo.IScreentime, log *jsonlog.Logger) ScreentimeService {
+	return ScreentimeService{ScreentimeRepo: screentimeRepo, log: log}
 }
 
-func (s *ScreentimeService) Capture(ctx context.Context) error {
-	s.log.Info("Capturing screentime")
-	screentime, err := s.ActivityRepo.GetBacklitMetrics(ctx)
+func (s ScreentimeService) CreateScreentimeHandler(ctx context.Context, input *input.Screentime) (*output.Screentime, error) {
+	screentimeModel := model.Screentime{
+		UserID:    input.UserID,
+		Username:  input.Username,
+		Date:      input.Date,
+		MinutesOn: input.Minutes,
+	}
+
+	return s.capture(ctx, &screentimeModel)
+}
+
+func (s ScreentimeService) capture(ctx context.Context, screentime *model.Screentime) (*output.Screentime, error) {
+	err := s.ScreentimeRepo.InsertBacklitMetrics(ctx, screentime)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	host := host.New(exec.Command)
-
-	apiInput := input.Screentime{
-		UserID:   "ID",
-		Username: host.Username,
-		Date:     screentime.Date,
-		Minutes:  screentime.MinutesOn,
+	apiOutput := output.Screentime{
+		Message: "ok",
 	}
 
-	jsonData, err := json.Marshal(apiInput)
-	if err != nil {
-		s.log.Error(err.Error())
-		return err
-	}
-
-	request, err := http.NewRequest(http.MethodPost, "some_URL", bytes.NewBuffer(jsonData))
-	if err != nil {
-		s.log.Error(err.Error())
-		return err
-	}
-
-	client := http.Client{}
-	resp, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusCreated {
-		return nil
-	} else {
-		return fmt.Errorf("API call failed with status %d and body %s ", resp.StatusCode, resp.Body)
-	}
+	return &apiOutput, nil
 }

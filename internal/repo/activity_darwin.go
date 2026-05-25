@@ -9,14 +9,14 @@ import (
 )
 
 type IActivity interface {
-	GetBacklitMetrics(ctx context.Context) (*model.Screentime, error)
+	GetBacklitMetrics(ctx context.Context) (*model.Activity, error)
 }
 
 type ActivityRepo struct {
 	DB *sql.DB
 }
 
-func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Screentime, error) {
+func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Activity, error) {
 	query := `SELECT
 					date(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') AS day,
 					ROUND(SUM(ZENDDATE - ZSTARTDATE) * 60 / 3600.0, 1) AS minutes_on
@@ -27,7 +27,7 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Screentime,
 					AND date(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') = date('now', 'localtime')
 				GROUP BY day;`
 
-	var screentime model.Screentime
+	var activity model.Activity
 
 	cancelCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -35,8 +35,8 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Screentime,
 	row := m.DB.QueryRowContext(cancelCtx, query)
 
 	err := row.Scan(
-		&screentime.Date,
-		&screentime.MinutesOn,
+		&activity.Date,
+		&activity.MinutesOn,
 	)
 	if err != nil {
 		switch {
@@ -46,7 +46,7 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Screentime,
 		return nil, err
 	}
 
-	return &screentime, nil
+	return &activity, nil
 }
 
 func NewActivityRepo(db *sql.DB) (*ActivityRepo, error) {
