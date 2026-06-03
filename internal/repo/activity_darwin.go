@@ -18,16 +18,17 @@ type ActivityRepo struct {
 
 func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Activity, error) {
 	query := `SELECT
-					date(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') AS day,
-					ROUND(SUM(ZENDDATE - ZSTARTDATE) * 60 / 3600.0, 1) AS minutes_on
+				  datetime(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') AS day,
+				  ROUND(SUM(ZENDDATE - ZSTARTDATE) * 60 / 3600.0, 1) AS minutes_on
 				FROM ZOBJECT
 				WHERE
-					ZSTREAMNAME = '/display/isBacklit'
-					AND ZVALUEINTEGER = 1
-					AND date(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') = date('now', 'localtime')
+				  ZSTREAMNAME = '/display/isBacklit'
+				  AND ZVALUEINTEGER = 1
+				  AND date(ZSTARTDATE + 978307200, 'unixepoch', 'localtime') = date('now', 'localtime')
 				GROUP BY day;`
 
 	var activity model.Activity
+	var dateStr string
 
 	cancelCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -35,7 +36,7 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Activity, e
 	row := m.DB.QueryRowContext(cancelCtx, query)
 
 	err := row.Scan(
-		&activity.Date,
+		&dateStr,
 		&activity.MinutesOn,
 	)
 	if err != nil {
@@ -43,6 +44,11 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Activity, e
 		case errors.Is(err, sql.ErrNoRows):
 			return nil, errors.New("No activity records found")
 		}
+		return nil, err
+	}
+
+	activity.Date, err = time.ParseInLocation(time.DateTime, dateStr, time.Local)
+	if err != nil {
 		return nil, err
 	}
 

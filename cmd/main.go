@@ -18,7 +18,7 @@ func main() {
 
 	rootCmd := &cobra.Command{Use: "micromanager"}
 
-	rootCmd.AddCommand(pollCmd(&cfg.ActivityDB, log))
+	rootCmd.AddCommand(pollCmd(cfg, log))
 	rootCmd.AddCommand(apiCmd(&cfg.APIService, log))
 
 	err = rootCmd.Execute()

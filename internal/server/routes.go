@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func (r APIRouter) Routes() http.Handler {
+func (r *APIRouter) Routes() http.Handler {
 	router := httprouter.New()
 	cfg := huma.DefaultConfig("Micromanager API", "1.0.0")
 	cfg.DocsRenderer = huma.DocsRendererSwaggerUI
@@ -25,5 +25,5 @@ func (r APIRouter) Routes() http.Handler {
 		w.Write([]byte("micromanager"))
 	})
 
-	return router
+	return r.middleware.logResponse(r.middleware.recoverPanic(r.middleware.enableCORS(r.middleware.logRequest(r.middleware.secureHeaders(router)))))
 }

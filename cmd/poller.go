@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func pollCmd(cfg *config.ActivityDB, log *jsonlog.Logger) *cobra.Command {
+func pollCmd(cfg *config.Specification, log *jsonlog.Logger) *cobra.Command {
 	return &cobra.Command{
 		Use:   "poll",
 		Short: "Polls the local data source of the device",
@@ -29,7 +29,7 @@ func pollCmd(cfg *config.ActivityDB, log *jsonlog.Logger) *cobra.Command {
 				log.Error(err.Error())
 			}
 
-			dbConnection, err := db.OpenSQLiteDB(*cfg)
+			dbConnection, err := db.OpenDB(cfg.DB)
 			if err != nil {
 				log.Fatal(err, nil)
 			}

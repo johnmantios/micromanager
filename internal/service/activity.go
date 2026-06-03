@@ -9,6 +9,7 @@ import (
 	"github.com/johnmantios/micromanager/internal/jsonlog"
 	"github.com/johnmantios/micromanager/internal/repo"
 	"github.com/johnmantios/micromanager/internal/server/input"
+	"io"
 	"net/http"
 	"os/exec"
 )
@@ -32,10 +33,10 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 	host := host.New(exec.Command)
 
 	apiInput := input.Screentime{
-		UserID:   "ID",
-		Username: host.Username,
-		Date:     activity.Date,
-		Minutes:  activity.MinutesOn,
+		UserID:    "ID",
+		Username:  host.Username,
+		Date:      activity.Date.Format("2006-01-02"),
+		MinutesOn: activity.MinutesOn,
 	}
 
 	jsonData, err := json.Marshal(apiInput)
@@ -44,7 +45,9 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 		return err
 	}
 
-	request, err := http.NewRequest(http.MethodPost, "some_URL", bytes.NewBuffer(jsonData))
+	s.log.Info(string(jsonData))
+
+	request, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/screentime", bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.log.Error(err.Error())
 		return err
@@ -60,6 +63,12 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 	if resp.StatusCode == http.StatusCreated {
 		return nil
 	} else {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		s.log.Error(fmt.Sprintf(
+			"API call failed with status %d and body %s",
+			resp.StatusCode,
+			string(bodyBytes),
+		))
 		return fmt.Errorf("API call failed with status %d and body %s ", resp.StatusCode, resp.Body)
 	}
 }

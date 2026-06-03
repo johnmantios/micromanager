@@ -16,7 +16,7 @@ func apiCmd(cfg *config.APIService, log *jsonlog.Logger) *cobra.Command {
 		Short: "Serves",
 		Long:  "Serves",
 		Run: func(cmd *cobra.Command, args []string) {
-			dbConnection, err := db.OpenTimeSeriesDB(cfg.TimeSeriesDB)
+			dbConnection, err := db.OpenDB(cfg.DB)
 			if err != nil {
 				log.Fatal(err, nil)
 			}
@@ -27,8 +27,9 @@ func apiCmd(cfg *config.APIService, log *jsonlog.Logger) *cobra.Command {
 			}
 
 			screentimeService := service.NewScreentimeService(screentimeRepo, log)
+			middleware := server.NewMiddleware(log)
 
-			err = server.Serve(cfg.Port, log, screentimeService)
+			err = server.Serve(cfg.Port, log, screentimeService, middleware)
 			if err != nil {
 				return
 			}

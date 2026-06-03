@@ -16,14 +16,15 @@ import (
 
 type APIRouter struct {
 	screentimeService service.ScreentimeService
+	middleware        middleware
 }
 
-func newAPIRouter(screentimeService service.ScreentimeService) *APIRouter {
-	return &APIRouter{screentimeService: screentimeService}
+func newAPIRouter(screentimeService service.ScreentimeService, middleware2 middleware) *APIRouter {
+	return &APIRouter{screentimeService: screentimeService, middleware: middleware2}
 }
 
-func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeService) error {
-	apiRouter := newAPIRouter(screentimeService)
+func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeService, middleware2 middleware) error {
+	apiRouter := newAPIRouter(screentimeService, middleware2)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
@@ -42,7 +43,7 @@ func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeSe
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		s := <-quit
 
-		log.Print("caught signal %s", s.String())
+		log.Print("caught signal ", s.String())
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

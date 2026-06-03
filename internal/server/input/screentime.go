@@ -1,10 +1,8 @@
 package input
 
-import "time"
-
 type Screentime struct {
-	UserID   string    `path:"userID" maxLength:"40"`
-	Username string    `path:"username" maxLength:"20"`
-	Date     time.Time `path:"date"`
-	Minutes  int       `path:"minutes"`
+	UserID    string  `json:"user_id"  maxLength:"80"`
+	Username  string  `json:"username"  maxLength:"80"`
+	Date      string  `json:"date"  maxLength:"80"`
+	MinutesOn float64 `json:"minutes_on"  maxLength:"80"`
 }
