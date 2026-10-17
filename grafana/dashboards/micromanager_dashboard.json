@@ -4,8 +4,8 @@
       {
         "builtIn": 1,
         "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
+          "type": "postgres",
+          "uid": "micromanager-postgres"
         },
         "enable": true,
         "hide": true,
@@ -24,8 +24,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "aepqym6ihryf4e"
+        "type": "postgres",
+        "uid": "micromanager-postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -119,8 +119,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "aepqym6ihryf4e"
+            "type": "postgres",
+            "uid": "micromanager-postgres"
           },
           "editorMode": "code",
           "format": "table",

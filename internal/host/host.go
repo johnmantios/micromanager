@@ -1,4 +1,4 @@
-package unlocked_time
+package host
 
 import (
 	"os/exec"
@@ -8,17 +8,13 @@ type commandRunner func(name string, arg ...string) *exec.Cmd
 
 type Host struct {
 	detector IDetector
-	UserID   string
+	Username string
 }
 
-func NewHost(cmdRunner commandRunner) *Host {
+func New(cmdRunner commandRunner) *Host {
 	detector := newDetector(cmdRunner)
 	return &Host{
 		detector: detector,
-		UserID:   detector.GetUsername(),
+		Username: detector.GetUsername(),
 	}
-}
-
-func (h *Host) IsLocked() bool {
-	return h.detector.IsLocked()
 }

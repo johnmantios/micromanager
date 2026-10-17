@@ -1,16 +1,21 @@
+apiVersion: 1
+
 datasources:
-   - name: 'Micromanager data source'
-     type: postgres
-     url: database:5432
-     user: root
-     secureJsonData:
-        password: root
-     jsonData:
-        database: micromanager
-        sslmode: "disable"
-        maxOpenConns: 100
-        maxIdleConns: 100
-        maxIdleConnsAuto: true
-        connMaxLifetime: 14400
-        postgresVersion: 1500 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
-        timescaledb: true
+  - name: Micromanager data source
+    type: postgres
+    access: proxy
+    orgId: 1
+    uid: aepqym6ihryf4e
+    url: database:5432
+    user: root
+    database: micromanager
+    secureJsonData:
+      password: root
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: true
+      maxOpenConns: 100
+      maxIdleConns: 100
+      maxIdleConnsAuto: true
+      connMaxLifetime: 14400

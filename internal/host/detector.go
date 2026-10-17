@@ -1,6 +1,5 @@
-package unlocked_time
+package host
 
 type IDetector interface {
-	IsLocked() bool
 	GetUsername() string
 }

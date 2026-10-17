@@ -17,25 +17,44 @@ services:
       test: ["CMD-SHELL", "pg_isready -U root -d micromanager"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  grafana-db:
+    image: postgres:16-alpine
+    container_name: grafana-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: grafana
+      POSTGRES_PASSWORD: grafana
+      POSTGRES_DB: grafana
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grafana -d grafana"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   grafana:
-    image: grafana/grafana
-    depends_on:
-      - database
     build:
       context: .
       dockerfile: ./grafana/Dockerfile
     container_name: grafana
     restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      grafana-db:
+        condition: service_healthy
     ports:
-      - '3000:3000'
+      - "3000:3000"
+      - "3000:3000"
     environment:
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/micromanager_dashboard.json"
       GF_DATABASE_TYPE: postgres
-      GF_DATABASE_HOST: database:5432
-      GF_DATABASE_NAME: micromanager
-      GF_DATABASE_USER: root
-      GF_DATABASE_PASSWORD: root
+      GF_DATABASE_HOST: grafana-db:5432
+      GF_DATABASE_NAME: grafana
+      GF_DATABASE_USER: grafana
+      GF_DATABASE_PASSWORD: grafana
       GF_DATABASE_SSL_MODE: disable
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
