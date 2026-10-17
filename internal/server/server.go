@@ -23,6 +23,13 @@ func newAPIRouter(screentimeService service.ScreentimeService, middleware2 middl
 	return &APIRouter{screentimeService: screentimeService, middleware: middleware2}
 }
 
+// NewHandler builds the fully wired HTTP handler for the API (routes plus
+// middleware). It is useful for testing the API end to end and for embedding
+// the API in a custom HTTP server.
+func NewHandler(screentimeService service.ScreentimeService, log *jsonlog.Logger) http.Handler {
+	return newAPIRouter(screentimeService, NewMiddleware(log)).Routes()
+}
+
 func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeService, middleware2 middleware) error {
 	apiRouter := newAPIRouter(screentimeService, middleware2)
 
@@ -53,7 +60,7 @@ func Serve(port int, log *jsonlog.Logger, screentimeService service.ScreentimeSe
 			shutdownError <- err
 		}
 
-		log.Print("completing background tasks %s", srv.Addr)
+		log.Print("completing background tasks ", srv.Addr)
 
 		wg.Wait()
 		shutdownError <- nil

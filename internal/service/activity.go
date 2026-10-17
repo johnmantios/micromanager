@@ -32,12 +32,11 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 
 	host := host.New(exec.Command)
 
-	apiInput := input.Screentime{
-		UserID:    "ID",
-		Username:  host.Username,
-		Date:      activity.Date.Format("2006-01-02"),
-		MinutesOn: activity.MinutesOn,
-	}
+	apiInput := input.Screentime{}
+	apiInput.Body.UserID = "ID"
+	apiInput.Body.Username = host.Username
+	apiInput.Body.Date = activity.Date.Format("2006-01-02")
+	apiInput.Body.MinutesOn = activity.MinutesOn
 
 	jsonData, err := json.Marshal(apiInput)
 	if err != nil {

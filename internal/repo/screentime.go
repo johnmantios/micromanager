@@ -25,7 +25,7 @@ func (m ScreentimeRepo) InsertBacklitMetrics(ctx context.Context, screentime *mo
 	cancelCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	return m.DB.QueryRowContext(cancelCtx, query, args).Scan(&screentime.Username)
+	return m.DB.QueryRowContext(cancelCtx, query, args...).Scan(&screentime.Username)
 
 }
 

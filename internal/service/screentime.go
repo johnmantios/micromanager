@@ -23,10 +23,10 @@ func (s ScreentimeService) CreateScreentimeHandler(ctx context.Context, input *i
 	s.log.Print("input is: ", input)
 
 	screentimeModel := model.Screentime{
-		UserID:    input.UserID,
-		Username:  input.Username,
-		Date:      input.Date,
-		MinutesOn: input.MinutesOn,
+		UserID:    input.Body.UserID,
+		Username:  input.Body.Username,
+		Date:      input.Body.Date,
+		MinutesOn: input.Body.MinutesOn,
 	}
 
 	return s.createScreenTimeHandler(ctx, &screentimeModel)
@@ -38,9 +38,8 @@ func (s ScreentimeService) createScreenTimeHandler(ctx context.Context, screenti
 		return nil, huma.Error500InternalServerError("Could not insert backlit metrics in database", err)
 	}
 
-	apiOutput := output.Screentime{
-		Message: "ok",
-	}
+	apiOutput := output.Screentime{}
+	apiOutput.Body.Message = "ok"
 
 	return &apiOutput, nil
 }
