@@ -4,26 +4,55 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os/exec"
+	"time"
+
 	"github.com/johnmantios/micromanager/internal/host"
 	"github.com/johnmantios/micromanager/internal/jsonlog"
 	"github.com/johnmantios/micromanager/internal/repo"
 	"github.com/johnmantios/micromanager/internal/server/input"
-	"io"
-	"net/http"
-	"os/exec"
+)
+
+const (
+	defaultAPIBaseURL  = "http://localhost:8080"
+	defaultHTTPTimeout = 10 * time.Second
 )
 
 type ActivityService struct {
 	ActivityRepo repo.IActivity
 	log          *jsonlog.Logger
+	apiBaseURL   string
+	httpClient   *http.Client
 }
 
+// NewActivityService builds an ActivityService that talks to the default API address.
 func NewActivityService(activityRepo repo.IActivity, log *jsonlog.Logger) ActivityService {
-	return ActivityService{ActivityRepo: activityRepo, log: log}
+	return NewActivityServiceWithAPI(activityRepo, log, defaultAPIBaseURL, nil)
 }
 
-func (s *ActivityService) Capture(ctx context.Context) error {
+// NewActivityServiceWithAPI builds an ActivityService against an explicit API address and HTTP client.
+func NewActivityServiceWithAPI(activityRepo repo.IActivity, log *jsonlog.Logger, apiBaseURL string, client *http.Client) ActivityService {
+	if apiBaseURL == "" {
+		apiBaseURL = defaultAPIBaseURL
+	}
+	if client == nil {
+		client = &http.Client{Timeout: defaultHTTPTimeout}
+	}
+
+	return ActivityService{
+		ActivityRepo: activityRepo,
+		log:          log,
+		apiBaseURL:   apiBaseURL,
+		httpClient:   client,
+	}
+}
+
+// CaptureTotalScreentime reads the daily backlit metric and sends it to the screentime endpoint.
+func (s *ActivityService) CaptureTotalScreentime(ctx context.Context) error {
 	s.log.Info("Capturing activity")
 	activity, err := s.ActivityRepo.GetBacklitMetrics(ctx)
 	if err != nil {
@@ -38,7 +67,46 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 	apiInput.Body.Date = activity.Date.Format("2006-01-02")
 	apiInput.Body.MinutesOn = activity.MinutesOn
 
-	jsonData, err := json.Marshal(apiInput)
+	return s.postJSON(ctx, "/v1/screentime", apiInput.Body)
+}
+
+// CaptureApplicationUsage reads the daily per application usage and sends it to the app usage endpoint.
+func (s *ActivityService) CaptureApplicationUsage(ctx context.Context) error {
+	s.log.Info("Capturing application usage")
+
+	applications, err := s.ActivityRepo.GetMinutesPerApplication(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(applications) == 0 {
+		s.log.Info("No application usage to capture")
+		return nil
+	}
+
+	apiInput := input.AppUsage{}
+	apiInput.Body.UserID = "ID"
+	apiInput.Body.Date = time.Now().Format("2006-01-02")
+	apiInput.Body.Applications = make([]input.AppUsageItem, 0, len(applications))
+	for _, application := range applications {
+		apiInput.Body.Applications = append(apiInput.Body.Applications, input.AppUsageItem{
+			BundleID:  application.BundleID,
+			MinutesOn: application.MinutesOn,
+		})
+	}
+
+	s.log.Info(fmt.Sprintf("Application usage: %+v", apiInput.Body))
+
+	return s.postJSON(ctx, "/v1/app-usage", apiInput.Body)
+}
+
+// CaptureAll runs every collector and joins their errors.
+func (s *ActivityService) CaptureAll(ctx context.Context) error {
+	return errors.Join(s.CaptureTotalScreentime(ctx), s.CaptureApplicationUsage(ctx))
+}
+
+func (s *ActivityService) postJSON(ctx context.Context, path string, payload any) error {
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		s.log.Error(err.Error())
 		return err
@@ -46,14 +114,14 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 
 	s.log.Info(string(jsonData))
 
-	request, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/screentime", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiBaseURL+path, bytes.NewBuffer(jsonData))
 	if err != nil {
 		s.log.Error(err.Error())
 		return err
 	}
+	request.Header.Set("Content-Type", "application/json")
 
-	client := http.Client{}
-	resp, err := client.Do(request)
+	resp, err := s.httpClient.Do(request)
 	if err != nil {
 		return err
 	}
@@ -61,13 +129,9 @@ func (s *ActivityService) Capture(ctx context.Context) error {
 
 	if resp.StatusCode == http.StatusCreated {
 		return nil
-	} else {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		s.log.Error(fmt.Sprintf(
-			"API call failed with status %d and body %s",
-			resp.StatusCode,
-			string(bodyBytes),
-		))
-		return fmt.Errorf("API call failed with status %d and body %s ", resp.StatusCode, resp.Body)
 	}
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	s.log.Error(fmt.Sprintf("API call failed with status %d and body %s", resp.StatusCode, string(bodyBytes)))
+	return fmt.Errorf("API call failed with status %d and body %s", resp.StatusCode, string(bodyBytes))
 }

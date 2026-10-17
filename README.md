@@ -8,6 +8,10 @@ Install this daemon in your system, connect it to a database and visualise your 
 
 Currently, supports timescale DB for persistent storage.
 
+## Architecture
+
+<p align="center"><img src="arch.png" width="1000" alt="Micromanager architecture"></p>
+
 Example: 
 
 <p align="center"><img src="assets/dashboard_example.png" width="320"></p>

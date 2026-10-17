@@ -21,6 +21,14 @@ func (r *APIRouter) Routes() http.Handler {
 		DefaultStatus: http.StatusCreated,
 	}, r.screentimeService.CreateScreentimeHandler)
 
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-app-usage",
+		Method:        http.MethodPost,
+		Path:          "/v1/app-usage",
+		Summary:       "Create application usage entries",
+		DefaultStatus: http.StatusCreated,
+	}, r.applicationUsageService.CreateAppUsageHandler)
+
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("micromanager"))
 	})

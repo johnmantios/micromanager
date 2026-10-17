@@ -10,6 +10,7 @@ import (
 
 type IActivity interface {
 	GetBacklitMetrics(ctx context.Context) (*model.Activity, error)
+	GetMinutesPerApplication(ctx context.Context) ([]model.ApplicationUsage, error)
 }
 
 type ActivityRepo struct {
@@ -53,6 +54,46 @@ func (m ActivityRepo) GetBacklitMetrics(ctx context.Context) (*model.Activity, e
 	}
 
 	return &activity, nil
+}
+
+func (m ActivityRepo) GetMinutesPerApplication(ctx context.Context) ([]model.ApplicationUsage, error) {
+	query := `SELECT
+				  ZOBJECT.ZVALUESTRING AS bundle_id,
+				  ROUND(SUM(ZOBJECT.ZENDDATE - ZOBJECT.ZSTARTDATE) * 60 / 3600.0, 1) AS minutes_on
+				FROM ZOBJECT
+				WHERE
+				  ZSTREAMNAME = '/app/usage'
+				  AND ZVALUESTRING IS NOT NULL
+				  AND date(ZOBJECT.ZSTARTDATE + 978307200, 'unixepoch', 'localtime') = date('now', 'localtime')
+				GROUP BY ZOBJECT.ZVALUESTRING
+				ORDER BY minutes_on DESC;`
+
+	cancelCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(cancelCtx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	applications := make([]model.ApplicationUsage, 0)
+	for rows.Next() {
+		var application model.ApplicationUsage
+		if err := rows.Scan(
+			&application.BundleID,
+			&application.MinutesOn,
+		); err != nil {
+			return nil, err
+		}
+		applications = append(applications, application)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return applications, nil
 }
 
 func NewActivityRepo(db *sql.DB) (*ActivityRepo, error) {

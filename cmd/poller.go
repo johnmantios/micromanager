@@ -39,11 +39,12 @@ func pollCmd(cfg *config.Specification, log *jsonlog.Logger) *cobra.Command {
 				log.Fatal(err, nil)
 			}
 
-			activityService := service.NewActivityService(activityRepo, log)
+			activityService := service.NewActivityServiceWithAPI(activityRepo, log, cfg.APIBaseURL, nil)
 
 			job, err := s.NewJob(
 				gocron.CronJob(cfg.PullPeriodCronSchedule, false),
-				gocron.NewTask(activityService.Capture, ctx),
+				gocron.NewTask(activityService.CaptureAll, ctx),
+				gocron.WithName("capture-all"),
 				gocron.WithEventListeners(
 					gocron.AfterJobRunsWithError(func(jobID uuid.UUID, jobName string, err error) {
 						log.Error(err.Error(), "jobID", jobID, "jobName", jobName)

@@ -26,10 +26,16 @@ func apiCmd(cfg *config.APIService, log *jsonlog.Logger) *cobra.Command {
 				log.Fatal(err, nil)
 			}
 
+			applicationUsageRepo, err := repo.NewApplicationUsageRepo(dbConnection)
+			if err != nil {
+				log.Fatal(err, nil)
+			}
+
 			screentimeService := service.NewScreentimeService(screentimeRepo, log)
+			applicationUsageService := service.NewApplicationUsageService(applicationUsageRepo, log)
 			middleware := server.NewMiddleware(log)
 
-			err = server.Serve(cfg.Port, log, screentimeService, middleware)
+			err = server.Serve(cfg.Port, log, screentimeService, applicationUsageService, middleware)
 			if err != nil {
 				return
 			}

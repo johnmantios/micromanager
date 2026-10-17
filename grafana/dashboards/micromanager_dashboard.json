@@ -1,25 +1,11 @@
 {
   "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "postgres",
-          "uid": "micromanager-postgres"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
+    "list": []
   },
-  "description": "Everything related to screen activity",
+  "description": "Screen time and per-application usage recorded by micromanager",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 3,
+  "graphTooltip": 1,
   "links": [],
   "panels": [
     {
@@ -30,92 +16,33 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "palette-classic"
           },
-          "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 70,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineWidth": 0,
-            "spanNulls": false
-          },
-          "mappings": [
-            {
-              "options": {
-                "": {
-                  "index": 2
-                },
-                "false": {
-                  "color": "dark-green",
-                  "index": 0,
-                  "text": "unlocked"
-                },
-                "true": {
-                  "color": "dark-red",
-                  "index": 1,
-                  "text": "locked"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+          "decimals": 1,
+          "unit": "min"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": []
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 11,
-        "w": 24,
+        "h": 9,
+        "w": 12,
         "x": 0,
         "y": 0
       },
       "id": 1,
       "options": {
-        "alignValue": "left",
+        "displayMode": "gradient",
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
-        "mergeValues": true,
-        "rowHeight": 0.9,
+        "orientation": "horizontal",
         "showValue": "auto",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
@@ -125,55 +52,144 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT user_id, tick, is_locked FROM micromanager.tick GROUP BY (user_id, tick, is_locked)",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
+          "rawSql": "SELECT bundle_id AS \"application\", SUM(minutes_on)::float AS \"minutes\"\nFROM micromanager.application_usage\nGROUP BY bundle_id\nORDER BY \"minutes\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Top applications (minutes)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "micromanager-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
           },
-          "table": "micromanager.tick"
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "decimals": 1,
+          "unit": "min"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
-      ],
-      "title": "Active screen timeline per user",
-      "transformations": [
+      },
+      "targets": [
         {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "user_id",
-            "rowField": "tick",
-            "valueField": "is_locked"
-          }
+          "datasource": {
+            "type": "postgres",
+            "uid": "micromanager-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date::timestamp AS \"time\", bundle_id AS metric, SUM(minutes_on)::float AS \"minutes\"\nFROM micromanager.application_usage\nGROUP BY date, bundle_id\nORDER BY date",
+          "refId": "A"
         }
       ],
-      "type": "state-timeline"
+      "title": "Application usage per day",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "micromanager-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "showPoints": "auto"
+          },
+          "decimals": 1,
+          "unit": "min"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "micromanager-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date::timestamp AS \"time\", SUM(minutes_on)::float AS \"screen time\"\nFROM micromanager.screentime\nGROUP BY date\nORDER BY date",
+          "refId": "A"
+        }
+      ],
+      "title": "Screen time per day",
+      "type": "timeseries"
     }
   ],
   "preload": false,
-  "schemaVersion": 41,
-  "tags": [],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "micromanager"
+  ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Micromanager",
-  "uid": "1b42ea4d-8ab2-43ca-95b0-a8a9175a864a",
+  "uid": "micromanager",
   "version": 1
 }

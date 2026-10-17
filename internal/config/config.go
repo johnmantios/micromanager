@@ -12,6 +12,7 @@ type (
 		LogLevel               jsonlog.Level `envconfig:"LOG_LEVEL"        default:"0"`
 		StatusPort             string        `envconfig:"STATUS_PORT"      default:"8000"`
 		PullPeriodCronSchedule string        `envconfig:"PULLPERIODCRONSCHEDULE"        default:"* * * * *" required:"true"`
+		APIBaseURL             string        `envconfig:"API_BASE_URL"      default:"http://localhost:8080"`
 		DB
 		APIService
 	}

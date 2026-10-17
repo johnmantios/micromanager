@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -33,17 +34,40 @@ func (s *stubScreentimeRepo) InsertBacklitMetrics(_ context.Context, screentime 
 
 var _ repo.IScreentime = (*stubScreentimeRepo)(nil)
 
+type appUsageInsert struct {
+	userID       string
+	date         string
+	applications []model.ApplicationUsage
+}
+
+// stubApplicationUsageRepo is an in-memory test double for repo.IApplicationUsage.
+type stubApplicationUsageRepo struct {
+	err      error
+	calls    int
+	inserted appUsageInsert
+}
+
+func (s *stubApplicationUsageRepo) InsertApplicationUsage(_ context.Context, userID, date string, applications []model.ApplicationUsage) error {
+	s.calls++
+	s.inserted = appUsageInsert{userID: userID, date: date, applications: applications}
+	return s.err
+}
+
+var _ repo.IApplicationUsage = (*stubApplicationUsageRepo)(nil)
+
 func discardLogger() *jsonlog.Logger {
 	return jsonlog.New(io.Discard, jsonlog.LevelError)
 }
 
 // TestRoutesHandler exercises internal/server/routes.go: the router wiring, the
-// Huma screentime endpoint, the healthcheck endpoint and the middleware chain.
-// It uses a stubbed repository so no external services are required.
+// Huma screentime and application usage endpoints, the healthcheck endpoint and
+// the middleware chain. It uses stubbed repositories so no external services are
+// required.
 func TestRoutesHandler(t *testing.T) {
 	t.Parallel()
 
-	const validPayload = `{"user_id":"user-1","username":"jane","date":"2024-05-01","minutes_on":42}`
+	const validScreentimePayload = `{"user_id":"user-1","username":"jane","date":"2024-05-01","minutes_on":42}`
+	const validAppUsagePayload = `{"user_id":"user-1","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":10},{"bundle_id":"com.microsoft.VSCode","minutes_on":3}]}`
 
 	tests := []struct {
 		name             string
@@ -52,12 +76,15 @@ func TestRoutesHandler(t *testing.T) {
 		body             string
 		contentType      string
 		repoErr          error
+		appRepoErr       error
 		wantStatus       int
 		wantContentType  string
 		wantBodyExact    string
 		wantBodyContains []string
 		wantRepoCalls    int
 		wantInserted     *model.Screentime
+		wantAppRepoCalls int
+		wantInsertedApp  *appUsageInsert
 		wantCORS         bool
 		skipSecureHeader bool
 	}{
@@ -82,7 +109,7 @@ func TestRoutesHandler(t *testing.T) {
 			name:          "create screentime maps payload and returns 201",
 			method:        http.MethodPost,
 			path:          "/v1/screentime",
-			body:          validPayload,
+			body:          validScreentimePayload,
 			contentType:   "application/json",
 			wantStatus:    http.StatusCreated,
 			wantCORS:      true,
@@ -96,7 +123,7 @@ func TestRoutesHandler(t *testing.T) {
 			name:             "create screentime returns 500 when repository fails",
 			method:           http.MethodPost,
 			path:             "/v1/screentime",
-			body:             validPayload,
+			body:             validScreentimePayload,
 			contentType:      "application/json",
 			repoErr:          errors.New("database is unavailable"),
 			wantStatus:       http.StatusInternalServerError,
@@ -134,6 +161,83 @@ func TestRoutesHandler(t *testing.T) {
 			wantCORS:      true,
 			wantRepoCalls: 0,
 		},
+		{
+			name:             "create app usage maps payload and returns 201",
+			method:           http.MethodPost,
+			path:             "/v1/app-usage",
+			body:             validAppUsagePayload,
+			contentType:      "application/json",
+			wantStatus:       http.StatusCreated,
+			wantCORS:         true,
+			wantAppRepoCalls: 1,
+			wantInsertedApp: &appUsageInsert{
+				userID: "user-1",
+				date:   "2024-05-01",
+				applications: []model.ApplicationUsage{
+					{BundleID: "com.apple.Safari", MinutesOn: 10},
+					{BundleID: "com.microsoft.VSCode", MinutesOn: 3},
+				},
+			},
+			wantBodyContains: []string{`"message":"ok"`},
+		},
+		{
+			name:             "create app usage accepts an empty application list",
+			method:           http.MethodPost,
+			path:             "/v1/app-usage",
+			body:             `{"user_id":"user-2","date":"2024-05-02","applications":[]}`,
+			contentType:      "application/json",
+			wantStatus:       http.StatusCreated,
+			wantCORS:         true,
+			wantAppRepoCalls: 1,
+			wantInsertedApp: &appUsageInsert{
+				userID:       "user-2",
+				date:         "2024-05-02",
+				applications: []model.ApplicationUsage{},
+			},
+			wantBodyContains: []string{`"message":"ok"`},
+		},
+		{
+			name:             "create app usage returns 500 when repository fails",
+			method:           http.MethodPost,
+			path:             "/v1/app-usage",
+			body:             validAppUsagePayload,
+			contentType:      "application/json",
+			appRepoErr:       errors.New("database is unavailable"),
+			wantStatus:       http.StatusInternalServerError,
+			wantCORS:         true,
+			wantAppRepoCalls: 1,
+			wantBodyContains: []string{`"status":500`, "Could not insert application usage in database"},
+		},
+		{
+			name:             "create app usage rejects malformed JSON with 400",
+			method:           http.MethodPost,
+			path:             "/v1/app-usage",
+			body:             `{"user_id":`,
+			contentType:      "application/json",
+			wantStatus:       http.StatusBadRequest,
+			wantCORS:         true,
+			wantAppRepoCalls: 0,
+			wantBodyContains: []string{`"status":400`},
+		},
+		{
+			name:             "create app usage rejects wrong field type with 422",
+			method:           http.MethodPost,
+			path:             "/v1/app-usage",
+			body:             `{"user_id":"user-1","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":"ten"}]}`,
+			contentType:      "application/json",
+			wantStatus:       http.StatusUnprocessableEntity,
+			wantCORS:         true,
+			wantAppRepoCalls: 0,
+			wantBodyContains: []string{`"status":422`},
+		},
+		{
+			name:             "create app usage rejects unsupported method with 405",
+			method:           http.MethodGet,
+			path:             "/v1/app-usage",
+			wantStatus:       http.StatusMethodNotAllowed,
+			wantCORS:         true,
+			wantAppRepoCalls: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -141,8 +245,10 @@ func TestRoutesHandler(t *testing.T) {
 			t.Parallel()
 
 			stub := &stubScreentimeRepo{err: tt.repoErr}
+			appStub := &stubApplicationUsageRepo{err: tt.appRepoErr}
 			handler := newAPIRouter(
 				service.NewScreentimeService(stub, discardLogger()),
+				service.NewApplicationUsageService(appStub, discardLogger()),
 				NewMiddleware(discardLogger()),
 			).Routes()
 
@@ -176,9 +282,18 @@ func TestRoutesHandler(t *testing.T) {
 			assert.Equal(t, stub.calls, tt.wantRepoCalls)
 			if tt.wantInserted != nil {
 				if stub.inserted == nil {
-					t.Fatalf("expected repository to receive %+v, got nil", tt.wantInserted)
+					t.Fatalf("expected screentime repository to receive %+v, got nil", tt.wantInserted)
 				}
 				assert.Equal(t, *stub.inserted, *tt.wantInserted)
+			}
+
+			assert.Equal(t, appStub.calls, tt.wantAppRepoCalls)
+			if tt.wantInsertedApp != nil {
+				assert.Equal(t, appStub.inserted.userID, tt.wantInsertedApp.userID)
+				assert.Equal(t, appStub.inserted.date, tt.wantInsertedApp.date)
+				if !reflect.DeepEqual(appStub.inserted.applications, tt.wantInsertedApp.applications) {
+					t.Errorf("applications: got %+v, want %+v", appStub.inserted.applications, tt.wantInsertedApp.applications)
+				}
 			}
 
 			if tt.wantCORS {

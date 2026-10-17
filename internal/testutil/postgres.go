@@ -37,6 +37,7 @@ func MigrationScripts() []string {
 	return []string{
 		filepath.Join(root, "migrations", "000001_create_micromanager_schema.up.sql"),
 		filepath.Join(root, "migrations", "000002_create_screentime_table.up.sql"),
+		filepath.Join(root, "migrations", "000003_create_application_usage_table.up.sql"),
 	}
 }
 
