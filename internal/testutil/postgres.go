@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"testing"
+	"sort"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -31,24 +31,38 @@ func RepoRoot() string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-// MigrationScripts returns the ordered up-migration scripts for the project.
-func MigrationScripts() []string {
-	root := RepoRoot()
-	return []string{
-		filepath.Join(root, "migrations", "000001_create_micromanager_schema.up.sql"),
-		filepath.Join(root, "migrations", "000002_create_screentime_table.up.sql"),
-		filepath.Join(root, "migrations", "000003_create_application_usage_table.up.sql"),
+// MigrationScripts returns every up-migration script in the migrations
+// directory, ordered by version. The version prefix in each filename keeps the
+// lexical order equal to the migration order.
+func MigrationScripts() ([]string, error) {
+	dir := filepath.Join(RepoRoot(), "migrations")
+
+	scripts, err := filepath.Glob(filepath.Join(dir, "*.up.sql"))
+	if err != nil {
+		return nil, fmt.Errorf("glob migrations in %s: %w", dir, err)
 	}
+	if len(scripts) == 0 {
+		return nil, fmt.Errorf("no up-migration scripts found in %s", dir)
+	}
+
+	sort.Strings(scripts)
+
+	return scripts, nil
 }
 
 // StartPostgres starts a TimescaleDB container, applies the migrations and returns a ready connection.
 func StartPostgres(ctx context.Context) (*Postgres, error) {
+	scripts, err := MigrationScripts()
+	if err != nil {
+		return nil, err
+	}
+
 	container, err := postgres.Run(ctx,
 		postgresImage,
 		postgres.WithDatabase("micromanager"),
 		postgres.WithUsername("root"),
 		postgres.WithPassword("root"),
-		postgres.WithOrderedInitScripts(MigrationScripts()...),
+		postgres.WithOrderedInitScripts(scripts...),
 		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
@@ -77,24 +91,6 @@ func StartPostgres(ctx context.Context) (*Postgres, error) {
 	}
 
 	return &Postgres{DB: db, DSN: dsn, container: container}, nil
-}
-
-// StartPostgresT starts a Postgres container for the duration of a test.
-func StartPostgresT(t *testing.T) *Postgres {
-	t.Helper()
-
-	pg, err := StartPostgres(context.Background())
-	if err != nil {
-		t.Fatalf("start postgres: %v", err)
-	}
-
-	t.Cleanup(func() {
-		if err := pg.Close(context.Background()); err != nil {
-			t.Errorf("close postgres: %v", err)
-		}
-	})
-
-	return pg
 }
 
 // Close releases the database connection and terminates the container.

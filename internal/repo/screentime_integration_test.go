@@ -136,6 +136,37 @@ func TestScreentimeRepoInsertBacklitMetrics(t *testing.T) {
 	}
 }
 
+// TestScreentimeRepoUpsert verifies that re-reporting the cumulative screen time
+// for the same user/day updates the existing row instead of inserting a duplicate.
+func TestScreentimeRepoUpsert(t *testing.T) {
+	screentimeRepo, err := repo.NewScreentimeRepo(testPostgres.DB)
+	if err != nil {
+		t.Fatalf("new screentime repo: %v", err)
+	}
+
+	resetScreentime(t)
+	ctx := context.Background()
+
+	if err := screentimeRepo.InsertBacklitMetrics(ctx, &model.Screentime{UserID: "user-1", Username: "jane", Date: "2024-05-01", MinutesOn: 10}); err != nil {
+		t.Fatalf("first insert: %v", err)
+	}
+	if err := screentimeRepo.InsertBacklitMetrics(ctx, &model.Screentime{UserID: "user-1", Username: "jane", Date: "2024-05-01", MinutesOn: 42}); err != nil {
+		t.Fatalf("second insert: %v", err)
+	}
+
+	assertRowCount(t, 1)
+
+	var minutesOn int
+	if err := testPostgres.DB.QueryRow(
+		"SELECT minutes_on FROM micromanager.screentime WHERE user_id = $1 AND date = $2", "user-1", "2024-05-01",
+	).Scan(&minutesOn); err != nil {
+		t.Fatalf("scan row: %v", err)
+	}
+	if minutesOn != 42 {
+		t.Errorf("minutes_on: got %d, want %d", minutesOn, 42)
+	}
+}
+
 // TestScreentimeServiceCreateScreentime verifies the service-to-repository path against a real database.
 func TestScreentimeServiceCreateScreentime(t *testing.T) {
 	screentimeRepo, err := repo.NewScreentimeRepo(testPostgres.DB)

@@ -14,12 +14,14 @@ import (
 type Level int8
 
 const (
-	LevelInfo Level = iota
-	LevelDebug
-	LevelWarning
-	LevelError
-	LevelFatal
-	LevelOff
+	// LevelDebug is the least severe level, so it is suppressed whenever a
+	// higher minimum level (e.g. LevelInfo) is configured.
+	LevelDebug   Level = iota - 1 // -1
+	LevelInfo                     // 0 (default)
+	LevelWarning                  // 1
+	LevelError                    // 2
+	LevelFatal                    // 3
+	LevelOff                      // 4
 )
 
 func (l Level) String() string {

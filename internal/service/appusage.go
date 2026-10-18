@@ -31,7 +31,14 @@ func (s ApplicationUsageService) CreateAppUsageHandler(ctx context.Context, inpu
 		})
 	}
 
-	if err := s.ApplicationUsageRepo.InsertApplicationUsage(ctx, input.Body.UserID, input.Body.Date, applications); err != nil {
+	usage := model.AppUsage{
+		UserID:       input.Body.UserID,
+		Username:     input.Body.Username,
+		Date:         input.Body.Date,
+		Applications: applications,
+	}
+
+	if err := s.ApplicationUsageRepo.InsertApplicationUsage(ctx, &usage); err != nil {
 		return nil, huma.Error500InternalServerError("Could not insert application usage in database", err)
 	}
 

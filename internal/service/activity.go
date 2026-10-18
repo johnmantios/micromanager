@@ -62,7 +62,7 @@ func (s *ActivityService) CaptureTotalScreentime(ctx context.Context) error {
 	host := host.New(exec.Command)
 
 	apiInput := input.Screentime{}
-	apiInput.Body.UserID = "ID"
+	apiInput.Body.UserID = host.Username
 	apiInput.Body.Username = host.Username
 	apiInput.Body.Date = activity.Date.Format("2006-01-02")
 	apiInput.Body.MinutesOn = activity.MinutesOn
@@ -85,7 +85,9 @@ func (s *ActivityService) CaptureApplicationUsage(ctx context.Context) error {
 	}
 
 	apiInput := input.AppUsage{}
-	apiInput.Body.UserID = "ID"
+	host := host.New(exec.Command)
+	apiInput.Body.UserID = host.Username
+	apiInput.Body.Username = host.Username
 	apiInput.Body.Date = time.Now().Format("2006-01-02")
 	apiInput.Body.Applications = make([]input.AppUsageItem, 0, len(applications))
 	for _, application := range applications {
@@ -95,7 +97,7 @@ func (s *ActivityService) CaptureApplicationUsage(ctx context.Context) error {
 		})
 	}
 
-	s.log.Info(fmt.Sprintf("Application usage: %+v", apiInput.Body))
+	s.log.Debug(fmt.Sprintf("Application usage: %+v", apiInput.Body))
 
 	return s.postJSON(ctx, "/v1/app-usage", apiInput.Body)
 }
@@ -111,8 +113,6 @@ func (s *ActivityService) postJSON(ctx context.Context, path string, payload any
 		s.log.Error(err.Error())
 		return err
 	}
-
-	s.log.Info(string(jsonData))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiBaseURL+path, bytes.NewBuffer(jsonData))
 	if err != nil {

@@ -5,6 +5,7 @@ package repo_test
 import (
 	"context"
 	"io"
+	"reflect"
 	"testing"
 
 	"github.com/johnmantios/micromanager/internal/jsonlog"
@@ -16,6 +17,7 @@ import (
 
 type storedApplicationUsage struct {
 	UserID    string
+	Username  string
 	Date      string
 	BundleID  string
 	MinutesOn float64
@@ -45,7 +47,7 @@ func readApplicationUsage(t *testing.T) []storedApplicationUsage {
 	t.Helper()
 
 	rows, err := testPostgres.DB.Query(
-		"SELECT user_id, date::text, bundle_id, minutes_on FROM micromanager.application_usage ORDER BY bundle_id",
+		"SELECT user_id, username, date::text, bundle_id, minutes_on FROM micromanager.application_usage ORDER BY bundle_id",
 	)
 	if err != nil {
 		t.Fatalf("query application usage: %v", err)
@@ -55,7 +57,7 @@ func readApplicationUsage(t *testing.T) []storedApplicationUsage {
 	stored := make([]storedApplicationUsage, 0)
 	for rows.Next() {
 		var row storedApplicationUsage
-		if err := rows.Scan(&row.UserID, &row.Date, &row.BundleID, &row.MinutesOn); err != nil {
+		if err := rows.Scan(&row.UserID, &row.Username, &row.Date, &row.BundleID, &row.MinutesOn); err != nil {
 			t.Fatalf("scan application usage: %v", err)
 		}
 		stored = append(stored, row)
@@ -79,6 +81,7 @@ func TestApplicationUsageRepoInsertApplicationUsage(t *testing.T) {
 	tests := []struct {
 		name         string
 		userID       string
+		username     string
 		date         string
 		applications []model.ApplicationUsage
 		wantErr      bool
@@ -86,9 +89,10 @@ func TestApplicationUsageRepoInsertApplicationUsage(t *testing.T) {
 		wantStored   []storedApplicationUsage
 	}{
 		{
-			name:   "persists multiple applications",
-			userID: "user-1",
-			date:   "2024-05-01",
+			name:     "persists multiple applications",
+			userID:   "user-1",
+			username: "jane",
+			date:     "2024-05-01",
 			applications: []model.ApplicationUsage{
 				{BundleID: "com.apple.Safari", MinutesOn: 10},
 				{BundleID: "com.microsoft.VSCode", MinutesOn: 3.5},
@@ -96,22 +100,24 @@ func TestApplicationUsageRepoInsertApplicationUsage(t *testing.T) {
 			},
 			wantRows: 3,
 			wantStored: []storedApplicationUsage{
-				{UserID: "user-1", Date: "2024-05-01", BundleID: "com.apple.Safari", MinutesOn: 10},
-				{UserID: "user-1", Date: "2024-05-01", BundleID: "com.microsoft.VSCode", MinutesOn: 3.5},
-				{UserID: "user-1", Date: "2024-05-01", BundleID: "com.tinyspeck.slackmacgap", MinutesOn: 1},
+				{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.apple.Safari", MinutesOn: 10},
+				{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.microsoft.VSCode", MinutesOn: 3.5},
+				{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.tinyspeck.slackmacgap", MinutesOn: 1},
 			},
 		},
 		{
 			name:         "does nothing for an empty application list",
 			userID:       "user-2",
+			username:     "amy",
 			date:         "2024-05-02",
 			applications: []model.ApplicationUsage{},
 			wantRows:     0,
 		},
 		{
-			name:   "rolls back on an invalid date",
-			userID: "user-3",
-			date:   "not-a-date",
+			name:     "rolls back on an invalid date",
+			userID:   "user-3",
+			username: "john",
+			date:     "not-a-date",
 			applications: []model.ApplicationUsage{
 				{BundleID: "com.apple.Safari", MinutesOn: 5},
 			},
@@ -124,7 +130,12 @@ func TestApplicationUsageRepoInsertApplicationUsage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetApplicationUsage(t)
 
-			err := applicationUsageRepo.InsertApplicationUsage(context.Background(), tt.userID, tt.date, tt.applications)
+			err := applicationUsageRepo.InsertApplicationUsage(context.Background(), &model.AppUsage{
+				UserID:       tt.userID,
+				Username:     tt.username,
+				Date:         tt.date,
+				Applications: tt.applications,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
@@ -149,6 +160,48 @@ func TestApplicationUsageRepoInsertApplicationUsage(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestApplicationUsageRepoUpsert verifies that re-reporting the cumulative
+// totals for the same user/day/app updates the existing row instead of
+// inserting a duplicate.
+func TestApplicationUsageRepoUpsert(t *testing.T) {
+	applicationUsageRepo, err := repo.NewApplicationUsageRepo(testPostgres.DB)
+	if err != nil {
+		t.Fatalf("new application usage repo: %v", err)
+	}
+
+	resetApplicationUsage(t)
+	ctx := context.Background()
+
+	first := []model.ApplicationUsage{
+		{BundleID: "com.apple.Safari", MinutesOn: 10},
+		{BundleID: "com.microsoft.VSCode", MinutesOn: 3},
+	}
+	if err := applicationUsageRepo.InsertApplicationUsage(ctx, &model.AppUsage{UserID: "user-1", Username: "jane", Date: "2024-05-01", Applications: first}); err != nil {
+		t.Fatalf("first insert: %v", err)
+	}
+
+	second := []model.ApplicationUsage{
+		{BundleID: "com.apple.Safari", MinutesOn: 25},
+		{BundleID: "com.microsoft.VSCode", MinutesOn: 8},
+		{BundleID: "com.tinyspeck.slackmacgap", MinutesOn: 2},
+	}
+	if err := applicationUsageRepo.InsertApplicationUsage(ctx, &model.AppUsage{UserID: "user-1", Username: "jane", Date: "2024-05-01", Applications: second}); err != nil {
+		t.Fatalf("second insert: %v", err)
+	}
+
+	assertApplicationUsageRowCount(t, 3)
+
+	stored := readApplicationUsage(t)
+	want := []storedApplicationUsage{
+		{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.apple.Safari", MinutesOn: 25},
+		{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.microsoft.VSCode", MinutesOn: 8},
+		{UserID: "user-1", Username: "jane", Date: "2024-05-01", BundleID: "com.tinyspeck.slackmacgap", MinutesOn: 2},
+	}
+	if !reflect.DeepEqual(stored, want) {
+		t.Fatalf("stored rows: got %+v, want %+v", stored, want)
 	}
 }
 

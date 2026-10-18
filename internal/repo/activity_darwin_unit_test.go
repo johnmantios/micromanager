@@ -1,16 +1,16 @@
 //go:build unit && darwin
 
-package repo_test
+package repo
 
 import (
 	"context"
 	"database/sql"
+	"math"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/johnmantios/micromanager/internal/model"
-	"github.com/johnmantios/micromanager/internal/repo"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,6 +24,16 @@ type zobjectRow struct {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+// withFixedNow pins the package clock for the duration of a test so the
+// day-window clamping in the queries is deterministic.
+func withFixedNow(t *testing.T, now time.Time) {
+	t.Helper()
+
+	original := nowFunc
+	nowFunc = func() time.Time { return now }
+	t.Cleanup(func() { nowFunc = original })
 }
 
 func newZObjectDB(t *testing.T, rows []zobjectRow) *sql.DB {
@@ -46,9 +56,8 @@ func newZObjectDB(t *testing.T, rows []zobjectRow) *sql.DB {
 		t.Fatalf("create ZOBJECT: %v", err)
 	}
 
-	now := time.Now()
-	noon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local)
-	macNoon := float64(noon.Unix() - 978307200)
+	base := nowFunc()
+	macBase := float64(base.Unix() - cocoaEpochOffset)
 
 	for _, row := range rows {
 		if _, err := db.Exec(
@@ -56,8 +65,8 @@ func newZObjectDB(t *testing.T, rows []zobjectRow) *sql.DB {
 			row.stream,
 			row.bundleID,
 			row.valueInteger,
-			macNoon+row.startOffset.Seconds(),
-			macNoon+row.endOffset.Seconds(),
+			macBase+row.startOffset.Seconds(),
+			macBase+row.endOffset.Seconds(),
 		); err != nil {
 			t.Fatalf("insert ZOBJECT row: %v", err)
 		}
@@ -69,6 +78,8 @@ func newZObjectDB(t *testing.T, rows []zobjectRow) *sql.DB {
 // TestActivityRepoGetMinutesPerApplication verifies the /app/usage aggregation,
 // filtering and ordering against a SQLite engine using a ZOBJECT fixture.
 func TestActivityRepoGetMinutesPerApplication(t *testing.T) {
+	withFixedNow(t, time.Date(2026, 1, 2, 15, 0, 0, 0, time.Local))
+
 	tests := []struct {
 		name string
 		rows []zobjectRow
@@ -104,7 +115,7 @@ func TestActivityRepoGetMinutesPerApplication(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newZObjectDB(t, tt.rows)
 
-			activityRepo, err := repo.NewActivityRepo(db)
+			activityRepo, err := NewActivityRepo(db)
 			if err != nil {
 				t.Fatalf("new activity repo: %v", err)
 			}
@@ -116,6 +127,68 @@ func TestActivityRepoGetMinutesPerApplication(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestActivityRepoGetBacklitMetrics verifies the backlit aggregation, including
+// clamping intervals to the current day and returning zero (rather than an
+// error) when there is no activity yet today.
+func TestActivityRepoGetBacklitMetrics(t *testing.T) {
+	withFixedNow(t, time.Date(2026, 1, 2, 15, 0, 0, 0, time.Local))
+
+	tests := []struct {
+		name string
+		rows []zobjectRow
+		want float64
+	}{
+		{
+			name: "sums the backlit-on intervals overlapping today",
+			rows: []zobjectRow{
+				{stream: "/display/isBacklit", valueInteger: 1, startOffset: -30 * time.Minute, endOffset: -10 * time.Minute},
+				{stream: "/display/isBacklit", valueInteger: 1, startOffset: -5 * time.Minute, endOffset: 0},
+				{stream: "/display/isBacklit", valueInteger: 0, startOffset: -10 * time.Minute, endOffset: -5 * time.Minute},
+				{stream: "/display/isBacklit", valueInteger: 1, startOffset: -36 * time.Hour, endOffset: -35 * time.Hour},
+			},
+			want: 25,
+		},
+		{
+			name: "clamps an interval that is still running",
+			rows: []zobjectRow{
+				{stream: "/display/isBacklit", valueInteger: 1, startOffset: -20 * time.Minute, endOffset: 5 * time.Minute},
+			},
+			want: 20,
+		},
+		{
+			name: "returns zero when there is no backlit activity today",
+			rows: []zobjectRow{
+				{stream: "/display/isBacklit", valueInteger: 0, startOffset: -time.Hour, endOffset: 0},
+				{stream: "/display/isBacklit", valueInteger: 1, startOffset: -36 * time.Hour, endOffset: -35 * time.Hour},
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newZObjectDB(t, tt.rows)
+
+			activityRepo, err := NewActivityRepo(db)
+			if err != nil {
+				t.Fatalf("new activity repo: %v", err)
+			}
+
+			got, err := activityRepo.GetBacklitMetrics(context.Background())
+			if err != nil {
+				t.Fatalf("get backlit metrics: %v", err)
+			}
+
+			if got.Date.Format("2006-01-02") != nowFunc().Format("2006-01-02") {
+				t.Errorf("date: got %s, want today", got.Date.Format("2006-01-02"))
+			}
+			if diff := math.Abs(got.MinutesOn - tt.want); diff > 0.05 {
+				t.Errorf("minutes_on: got %v, want %v", got.MinutesOn, tt.want)
 			}
 		})
 	}

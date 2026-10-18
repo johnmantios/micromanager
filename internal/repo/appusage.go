@@ -9,20 +9,25 @@ import (
 )
 
 type IApplicationUsage interface {
-	InsertApplicationUsage(ctx context.Context, userID, date string, applications []model.ApplicationUsage) error
+	InsertApplicationUsage(ctx context.Context, usage *model.AppUsage) error
 }
 
 type ApplicationUsageRepo struct {
 	DB *sql.DB
 }
 
-func (m ApplicationUsageRepo) InsertApplicationUsage(ctx context.Context, userID, date string, applications []model.ApplicationUsage) error {
-	if len(applications) == 0 {
+// InsertApplicationUsage upserts the per-application totals for a user/day.
+// Each poll reports the cumulative total for the day, so an existing row is
+// updated rather than duplicated.
+func (m ApplicationUsageRepo) InsertApplicationUsage(ctx context.Context, usage *model.AppUsage) error {
+	if len(usage.Applications) == 0 {
 		return nil
 	}
 
-	query := `INSERT INTO micromanager.application_usage (user_id, date, bundle_id, minutes_on)
-    			VALUES ($1, $2, $3, $4);`
+	query := `INSERT INTO micromanager.application_usage (user_id, username, date, bundle_id, minutes_on)
+    			VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (user_id, date, bundle_id)
+				DO UPDATE SET username = EXCLUDED.username, minutes_on = EXCLUDED.minutes_on;`
 
 	cancelCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -39,8 +44,8 @@ func (m ApplicationUsageRepo) InsertApplicationUsage(ctx context.Context, userID
 	}
 	defer statement.Close()
 
-	for _, application := range applications {
-		if _, err := statement.ExecContext(cancelCtx, userID, date, application.BundleID, application.MinutesOn); err != nil {
+	for _, application := range usage.Applications {
+		if _, err := statement.ExecContext(cancelCtx, usage.UserID, usage.Username, usage.Date, application.BundleID, application.MinutesOn); err != nil {
 			return err
 		}
 	}

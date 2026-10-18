@@ -3,8 +3,9 @@ package repo
 import (
 	"context"
 	"database/sql"
-	"github.com/johnmantios/micromanager/internal/model"
 	"time"
+
+	"github.com/johnmantios/micromanager/internal/model"
 )
 
 type IScreentime interface {
@@ -15,9 +16,13 @@ type ScreentimeRepo struct {
 	DB *sql.DB
 }
 
+// InsertBacklitMetrics upserts the screen time for a user/day. Each poll reports
+// the cumulative total for the day
 func (m ScreentimeRepo) InsertBacklitMetrics(ctx context.Context, screentime *model.Screentime) error {
 	query := `INSERT INTO micromanager.screentime (user_id, username, date, minutes_on)
     			VALUES ($1, $2, $3, $4)
+				ON CONFLICT (user_id, date)
+				DO UPDATE SET username = EXCLUDED.username, minutes_on = EXCLUDED.minutes_on
 				RETURNING username;`
 
 	args := []any{screentime.UserID, screentime.Username, screentime.Date, screentime.MinutesOn}

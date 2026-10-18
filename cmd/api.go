@@ -37,7 +37,7 @@ func apiCmd(cfg *config.APIService, log *jsonlog.Logger) *cobra.Command {
 
 			err = server.Serve(cfg.Port, log, screentimeService, applicationUsageService, middleware)
 			if err != nil {
-				return
+				log.Fatal(err, nil)
 			}
 		},
 	}

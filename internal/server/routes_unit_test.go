@@ -36,6 +36,7 @@ var _ repo.IScreentime = (*stubScreentimeRepo)(nil)
 
 type appUsageInsert struct {
 	userID       string
+	username     string
 	date         string
 	applications []model.ApplicationUsage
 }
@@ -47,9 +48,9 @@ type stubApplicationUsageRepo struct {
 	inserted appUsageInsert
 }
 
-func (s *stubApplicationUsageRepo) InsertApplicationUsage(_ context.Context, userID, date string, applications []model.ApplicationUsage) error {
+func (s *stubApplicationUsageRepo) InsertApplicationUsage(_ context.Context, usage *model.AppUsage) error {
 	s.calls++
-	s.inserted = appUsageInsert{userID: userID, date: date, applications: applications}
+	s.inserted = appUsageInsert{userID: usage.UserID, username: usage.Username, date: usage.Date, applications: usage.Applications}
 	return s.err
 }
 
@@ -67,7 +68,7 @@ func TestRoutesHandler(t *testing.T) {
 	t.Parallel()
 
 	const validScreentimePayload = `{"user_id":"user-1","username":"jane","date":"2024-05-01","minutes_on":42}`
-	const validAppUsagePayload = `{"user_id":"user-1","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":10},{"bundle_id":"com.microsoft.VSCode","minutes_on":3}]}`
+	const validAppUsagePayload = `{"user_id":"user-1","username":"jane","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":10},{"bundle_id":"com.microsoft.VSCode","minutes_on":3}]}`
 
 	tests := []struct {
 		name             string
@@ -184,7 +185,7 @@ func TestRoutesHandler(t *testing.T) {
 			name:             "create app usage accepts an empty application list",
 			method:           http.MethodPost,
 			path:             "/v1/app-usage",
-			body:             `{"user_id":"user-2","date":"2024-05-02","applications":[]}`,
+			body:             `{"user_id":"user-2","username":"amy","date":"2024-05-02","applications":[]}`,
 			contentType:      "application/json",
 			wantStatus:       http.StatusCreated,
 			wantCORS:         true,
@@ -223,7 +224,7 @@ func TestRoutesHandler(t *testing.T) {
 			name:             "create app usage rejects wrong field type with 422",
 			method:           http.MethodPost,
 			path:             "/v1/app-usage",
-			body:             `{"user_id":"user-1","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":"ten"}]}`,
+			body:             `{"user_id":"user-1","username":"jane","date":"2024-05-01","applications":[{"bundle_id":"com.apple.Safari","minutes_on":"ten"}]}`,
 			contentType:      "application/json",
 			wantStatus:       http.StatusUnprocessableEntity,
 			wantCORS:         true,
